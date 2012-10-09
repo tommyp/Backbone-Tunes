@@ -69,7 +69,11 @@
 
     currentTrackUrl: function() {
       var album = this.currentAlbum();
-      return album.trackUrlAtIndex(this.get('currentTrackIndex'));
+      if (album) {
+        return album.trackUrlAtIndex(this.get('currentTrackIndex'));
+      } else {
+        return null;
+      }
     },
 
     nextTrack: function() {
@@ -159,8 +163,27 @@
       },
 
       initialize: function() {
-        _.bindAll(this, 'render', 'remove');
+        _.bindAll(this, 'render', 'remove', 'updateState', 'updateTrack');
+        this.player = this.options.player;
+        this.player.bind('change:state', this.updateState);
+        this.player.bind('change:currentTrackIndex', this.updateTrack);
         this.model.bind('remove', this.remove);
+      },
+
+      updateState: function() {
+        var isAlbumCurrent = (this.player.currentAlbum() === this.model);
+        $(this.el).toggleClass('current', isAlbumCurrent);
+      },
+
+      updateTrack: function() {
+        var isAlbumCurrent = (this.player.currentAlbum() === this.model);
+        if (isAlbumCurrent) {
+          var currentTrackIndex = this.player.get('currentTrackIndex');
+          this.$("li").each(function(index, el) {
+            $(el).toggleClass('current', index == currentTrackIndex);
+          });
+        }
+        this.updateState();
       },
 
       removeFromPlaylist: function() {
@@ -173,14 +196,32 @@
       tagName: 'section',
       className: 'playlist',
 
+      events: {
+        'click .play': 'play',
+        'click .pause': 'pause',
+        'click .next': 'nextTrack',
+        'click .prev': 'prevTrack'
+      },
+
       initialize: function() {
-        _.bindAll(this, 'render', 'renderAlbum', 'queueAlbum');
+        _.bindAll(this, 'render', 
+          'updateState',
+          'updateTrack',
+          'renderAlbum', 
+          'queueAlbum');
         this.template = _.template($('#playlist-template').html());
         this.collection.bind('reset', this.render);
         this.collection.bind('add', this.renderAlbum)
         this.player = this.options.player;
+        this.player.bind('change:state', this.updateState);
+        this.player.bind('change:currentTrackIndex', this.updateTrack);
+        this.createAudio();
         this.library = this.options.library;
         this.library.bind('select', this.queueAlbum);
+      },
+
+      createAudio: function() {
+        this.audio = new Audio();
       },
 
       render: function() {
@@ -199,8 +240,41 @@
         this.$('ul').append(view.render().el)
       },
 
-      queueAlbum: function(album) {
+     
+
+      updateState: function() {
+        this.updateTrack();
+        this.$("button.play").toggle(this.player.isStopped());
+        this.$("button.pause").toggle(this.player.isPlaying());
+      },
+
+      updateTrack: function() {
+        this.audio.src = this.player.currentTrackUrl();
+        if (this.player.get('state') == 'play') {
+          this.audio.play();
+        } else {
+          this.audio.pause();
+        }
+      },
+
+      queueAlbum: function(album){
         this.collection.add(album);
+      },
+
+      play: function() {
+        this.player.play();
+      },
+
+      pause: function() {
+        this.player.pause();
+      },
+
+      nextTrack: function() {
+        this.player.nextTrack();
+      },
+
+      prevTrack: function() {
+        this.player.prevTrack();
       }
     });
 
